@@ -358,6 +358,18 @@ main.sem-barra{ padding-top: calc(var(--safe-t) + 28px); }
 .kbd svg{ width: 16px; height: 16px; }
 .lbl-sec{ font-size: .86rem; font-weight: 700; color: var(--label-2); margin: 0 4px 8px; }
 
+/* ---------- Guia ---------- */
+.tour{ position: fixed; inset: 0; z-index: 70; }
+.tour-hole{ position: fixed; border-radius: 26px; box-shadow: 0 0 0 9999px rgb(0 0 0 / .62), 0 0 0 3px rgb(255 255 255 / .9); transition: all .35s var(--ease-out); pointer-events: none; }
+.tour-tip{ position: fixed; left: 14px; right: 14px; max-width: 440px; margin: 0 auto; background: var(--card); border-radius: 24px; padding: 18px 18px 16px; box-shadow: 0 12px 40px rgb(0 0 0 / .3); }
+.tour-tip.in{ animation: pop .3s var(--ease-out) both; }
+@media (prefers-color-scheme: dark){ .tour-tip{ background: #2c2c2e; } }
+.tour-n{ margin: 0 0 4px; font-size: .8rem; font-weight: 700; color: var(--accent); }
+.tour-tip h3{ margin: 0 0 4px; font-size: 1.2rem; font-weight: 750; }
+.tour-tip p{ margin: 0; color: var(--label-2); font-size: 1rem; }
+.tour-acts{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.tour-acts .btn{ width: auto; min-height: 50px; padding: 0 26px; }
+
 /* ---------- Admin ---------- */
 .adm-row{ padding: 14px 16px; }
 .adm-row + .adm-row{ border-top: .5px solid var(--separator); }
@@ -620,19 +632,17 @@ const membro = id => S.membros.find(m => m.id === id);
 const eu = () => S.sessao && membro(S.sessao.membro_id);
 
 /* ---------------------------- Rotas ----------------------------
+   (sem sessão)  "Quem é você?" (ecrã de entrada)
    ''            início
-   #/bemvindo    primeira visita
-   #/entrar      "Quem é você?"
    #/p/<id>      lista de uma pessoa
    #/admin       administração
 ------------------------------------------------------------------- */
 function rota(){
   const h = location.hash;
   let m;
-  if ((m = h.match(/^#\/p\/([\w-]+)/))) return { nome: 'perfil', id: m[1], chave: 'p' + m[1] };
-  if (h.startsWith('#/bemvindo')) return { nome: 'bemvindo', chave: 'bemvindo' };
-  if (h.startsWith('#/entrar')) return { nome: 'entrar', chave: 'entrar' };
   if (h.startsWith('#/admin')) return { nome: 'admin', chave: 'admin' };
+  if (!S.sessao) return { nome: 'entrar', chave: 'entrar' };          // sem sessão: só "Quem é você?"
+  if ((m = h.match(/^#\/p\/([\w-]+)/))) return { nome: 'perfil', id: m[1], chave: 'p' + m[1] };
   return { nome: 'inicio', chave: 'inicio' };
 }
 function ir(h, substituir){
@@ -641,7 +651,7 @@ function ir(h, substituir){
   if (substituir) location.replace(alvo); else location.hash = alvo;
   if (location.hash === antes) render();   // mesma rota: não há hashchange
 }
-window.addEventListener('hashchange', () => { fecharSheet(true); render(); });
+window.addEventListener('hashchange', () => { if (!guiaAtivo) fecharSheet(true); render(); });
 
 /* ---------------------------- Render ---------------------------- */
 const view = $('#view'), topbar = $('#topbar');
@@ -652,85 +662,63 @@ function render(){
   S.ultimaRota = r.chave;
   if (antes !== null && antes !== r.chave){
     view.classList.remove('in-fwd', 'in-back'); void view.offsetWidth;
-    view.classList.add(r.nome === 'inicio' ? 'in-back' : 'in-fwd');
+    view.classList.add(r.nome === 'perfil' || r.nome === 'admin' ? 'in-fwd' : 'in-back');
     window.scrollTo(0, 0);
   }
-  view.classList.toggle('sem-barra', r.nome === 'bemvindo');
-  ({ inicio: renderInicio, bemvindo: renderBemvindo, entrar: renderEntrar, perfil: () => renderPerfil(r.id), admin: renderAdmin })[r.nome]();
+  ({ inicio: renderInicio, entrar: renderEntrar, perfil: () => renderPerfil(r.id), admin: renderAdmin })[r.nome]();
   onScroll();
 }
 
 const btnAjuda = `<button class="pill glass press" data-ajuda>${I.help}Ajuda</button>`;
 const btnInicio = `<button class="pill glass press" data-inicio aria-label="Voltar ao início">${I.back}Início</button>`;
 const btnConta = `<button class="pill glass press" data-conta>${I.user}Conta</button>`;
+const avisoApp = () => DENTRO_DE_APP && !ls.get('presentes-aviso-app') ? `
+    <div class="notice"><span style="font-size:1.4rem">⚠️</span>
+      <span><b>Abra no navegador do telemóvel</b><br>Está a ver a lista dentro de outra app. Para não ter de entrar sempre de novo, toque em <span class="kbd">${I.dots}</span> ou <span class="kbd">⋯</span> e escolha <b>“Abrir no navegador”</b> (Safari ou Chrome).</span>
+      <button class="x press" data-fechar-aviso aria-label="Fechar aviso">${I.x}</button>
+    </div>` : '';
 
-/* ----- Boas-vindas ----- */
-function renderBemvindo(){
-  document.title = CONFIG.TITULO;
-  topbar.innerHTML = '';
-  view.innerHTML = `
-    <section class="welcome">
-      <span class="big-gift" aria-hidden="true">🎁</span>
-      <h1>Bem-vindo à<br>${esc(CONFIG.TITULO)}</h1>
-      <p class="lead">Aqui cada pessoa da família escreve o que gostaria de ganhar. Assim, quem lhe vai dar o presente já sabe o que comprar.</p>
-      <div class="steps">
-        <div class="step card"><span class="n">1</span><span><b class="st">Escolha o seu nome</b><span class="t">Na lista da família.</span></span></div>
-        <div class="step card"><span class="n">2</span><span><b class="st">Digite o seu PIN</b><span class="t">Na primeira vez, o PIN é <b>1234</b>.</span></span></div>
-        <div class="step card"><span class="n">3</span><span><b class="st">Adicione os presentes</b><span class="t">O que gostaria de ganhar. Pode pôr quantos quiser.</span></span></div>
-      </div>
-      <button class="btn btn-primary press" data-comecar>Começar</button>
-      <button class="btn btn-gray press" data-so-ver>Só quero ver as listas</button>
-    </section>`;
-}
-
-/* ----- Quem é você? ----- */
+/* ----- Ecrã de entrada: "Quem é você?" ----- */
 function renderEntrar(){
-  document.title = 'Quem é você? · ' + CONFIG.TITULO;
-  topbar.innerHTML = `${btnInicio}<span class="top-title">Quem é você?</span><span></span>`;
+  document.title = CONFIG.TITULO;
+  topbar.innerHTML = `<span></span><span class="top-title">Quem é você?</span>${btnAjuda}`;
   view.innerHTML = `
-    <header class="prof-head" style="padding-bottom:18px">
-      <h1>Quem é você?</h1>
-      <p>Toque no <b>seu nome</b> para fazer a sua lista.</p>
+    <header class="hero" style="padding-bottom:18px">
+      <span class="big-gift" aria-hidden="true">🎁</span>
+      <h1>${esc(CONFIG.TITULO)}</h1>
+      <p>Cada pessoa da família escreve o que gostaria de ganhar.</p>
     </header>
+    ${avisoApp()}
+    <h2 class="h-sec">Quem é você?</h2>
+    <p class="p-sec">Toque no <b>seu nome</b> para entrar.</p>
     <div class="rows card">
       ${S.membros.length ? S.membros.map(m => `
         <button class="row" data-sou="${esc(m.id)}">${avatar(m)}<span class="rn">${esc(m.nome)}</span><span class="chev">${I.chev}</span></button>
-      `).join('') : '<div class="skeleton" style="border-radius:0"></div><div class="skeleton" style="border-radius:0"></div>'}
+      `).join('') : '<div class="skeleton" style="border-radius:0"></div><div class="skeleton" style="border-radius:0"></div><div class="skeleton" style="border-radius:0"></div>'}
     </div>
     <p class="center muted" style="font-size:.9rem;margin:16px 10px 0">Não encontra o seu nome? Fale com ${quemOrganiza()}.</p>
-    <p class="center"><button class="link-text" data-inicio>Só quero ver as listas</button></p>`;
+    ${DEMO ? '<p class="foot-note">Modo demonstração · os dados ficam só neste aparelho</p>' : ''}`;
 }
 
 /* ----- Início ----- */
 function renderInicio(){
   document.title = CONFIG.TITULO;
   const e = eu();
-  topbar.innerHTML = `${btnAjuda}<span class="top-title">${esc(CONFIG.TITULO)}</span>${e ? btnConta : '<span></span>'}`;
-  const avisoApp = DENTRO_DE_APP && !ls.get('presentes-aviso-app') ? `
-    <div class="notice"><span style="font-size:1.4rem">⚠️</span>
-      <span><b>Abra no navegador do telemóvel</b><br>Está a ver a lista dentro de outra app. Para não ter de entrar sempre de novo, toque em <span class="kbd">${I.dots}</span> ou <span class="kbd">⋯</span> e escolha <b>“Abrir no navegador”</b> (Safari ou Chrome).</span>
-      <button class="x press" data-fechar-aviso aria-label="Fechar aviso">${I.x}</button>
-    </div>` : '';
+  if (!e){ view.innerHTML = '<div class="skeleton" style="margin-top:40px"></div>'; topbar.innerHTML = ''; return; }
+  topbar.innerHTML = `${btnAjuda}<span class="top-title">${esc(CONFIG.TITULO)}</span>${btnConta}`;
   view.innerHTML = `
     <header class="hero">
       <span class="big-gift" aria-hidden="true">🎁</span>
       <h1>${esc(CONFIG.TITULO)}</h1>
       <p>${esc(CONFIG.SUBTITULO)}</p>
     </header>
-    ${avisoApp}
-    ${e ? `
-      <button class="cta-main press" data-go="${esc(e.id)}">
-        ${avatar(e)}
-        <span><span class="t1">Olá, ${esc(e.nome)}! 👋</span><span class="t2">Ver e editar a minha lista</span></span>
-        <span class="chev">${I.chev}</span>
-      </button>
-      <button class="not-me" data-nao-sou>Não é ${esc(e.nome)}? Toque aqui</button>` : `
-      <button class="cta-main press" data-ir-entrar>
-        <span class="ic" aria-hidden="true">✍️</span>
-        <span><span class="t1">Ainda não fez a sua lista?</span><span class="t2">Fazer a minha lista</span></span>
-        <span class="chev">${I.chev}</span>
-      </button>
-      <div class="spacer-26"></div>`}
+    ${avisoApp()}
+    <button class="cta-main press" data-go="${esc(e.id)}">
+      ${avatar(e)}
+      <span><span class="t1">Olá, ${esc(e.nome)}! 👋</span><span class="t2">Ver e editar a minha lista</span></span>
+      <span class="chev">${I.chev}</span>
+    </button>
+    <button class="not-me" data-nao-sou>Não é ${esc(e.nome)}? Toque aqui</button>
     <h2 class="h-sec">Família</h2>
     <p class="p-sec">Toque no nome de alguém para ver o que essa pessoa gostaria de ganhar.</p>
     <div class="grid">
@@ -835,13 +823,9 @@ function renderPerfil(id){
           <div class="acts"><button class="mini-btn blue press" data-instalar>Ver como</button><button class="mini-btn press" data-instalar-nao>Agora não</button></div>
         </div>
       </div>` : ''}
-    ${!dono ? `
-      <div class="owner-cta card">
-        <p>É ${esc(m.nome)}? Entre para fazer a sua lista.</p>
-        <button class="btn btn-gray press" data-login="${esc(m.id)}">Sou eu · Entrar com PIN</button>
-      </div>` : ''}
   `;
   if (!S._fresco || !S._fresco[id]) carregarItens(id);
+  if (dono && itens) setTimeout(() => talvezGuia('lista'), 450);
 }
 
 async function carregarItens(id){
@@ -1053,11 +1037,14 @@ function pedirLogin(id){
       const r = await rpc('entrar', { p_membro: id, p_pin: pin });
       if (!r || !r.ok) return { erro: (r && r.erro) || 'PIN incorreto.' };
       guardarSessao({ token: r.token, membro_id: r.membro_id, nome: r.nome });
-      ls.set('presentes-visto', true);
       fecharSheet();
       toast(`Entrou como ${r.nome} ✓`);
-      if (rota().id !== id) ir('p/' + id, rota().nome !== 'inicio'); else render();
-      if (!r.pin_alterado) setTimeout(() => sugerirNovoPin(pin), 700);
+      ir('', true);                                   // depois de entrar: página inicial
+      // Na PRIMEIRA vez: guia rápido e, a seguir, sugestão de criar PIN próprio
+      const jaSugerido = ls.get('presentes-pin-sugerido', []);
+      const sugerir = !r.pin_alterado && !jaSugerido.includes(r.membro_id);
+      if (sugerir) ls.set('presentes-pin-sugerido', [...jaSugerido, r.membro_id]);
+      setTimeout(() => talvezGuia('inicio', () => { if (sugerir) setTimeout(() => sugerirNovoPin(pin), 250); }), 600);
     }
   });
 }
@@ -1148,7 +1135,8 @@ function abrirAjuda(){
     <div class="sheet-head"><h2>Como funciona</h2><button class="close-x press" data-fechar aria-label="Fechar">${I.x}</button></div>
     <p class="sheet-intro">Aqui cada pessoa da família escreve o que gostaria de ganhar. Assim, quem lhe vai dar o presente sabe o que comprar.</p>
     <div class="help-steps">
-      <div class="step card"><span class="n">✍️</span><span><b class="st">Para fazer a sua lista</b><span class="t">Na página inicial, toque em “Fazer a minha lista”, escolha o seu nome e digite o PIN. Na primeira vez o PIN é <b>1234</b>.</span></span></div>
+      <div class="step card"><span class="n">🔑</span><span><b class="st">Para entrar</b><span class="t">Toque no seu nome e digite o seu PIN. Na primeira vez o PIN é <b>1234</b>.</span></span></div>
+      <div class="step card"><span class="n">✍️</span><span><b class="st">Para fazer a sua lista</b><span class="t">Na página inicial, toque em “Ver e editar a minha lista” e depois no botão azul <b>+</b>.</span></span></div>
       <div class="step card"><span class="n">👀</span><span><b class="st">Para ver a lista de alguém</b><span class="t">Na página inicial, toque no nome dessa pessoa.</span></span></div>
       <div class="step card"><span class="n">🛍️</span><span><b class="st">Para comprar</b><span class="t">Se a pessoa deixou um link, toque em “Ver na loja”.</span></span></div>
     </div>
@@ -1160,6 +1148,7 @@ function abrirAjuda(){
     </div>
     <div class="group">
       ${!INSTALADA ? `<button class="opt press" data-instalar><span class="oi" style="background:var(--green)">${I.phone}</span><span class="ot">Guardar no ecrã principal<small>Fica com um ícone, como uma app.</small></span></button>` : ''}
+      ${S.sessao ? `<button class="opt press" data-rever-guia><span class="oi" style="background:var(--accent)">${I.help}</span><span class="ot">Ver o guia outra vez<small>Mostra passo a passo como usar.</small></span></button>` : ''}
       <button class="opt press" data-esqueci-h><span class="oi" style="background:var(--orange)">${I.key}</span><span class="ot">Esqueci o meu PIN</span></button>
     </div>`, { label: 'Ajuda' });
   bd.addEventListener('click', e => {
@@ -1169,7 +1158,79 @@ function abrirAjuda(){
       bd.querySelectorAll('[data-letra]').forEach(b => { const on = b === l; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
     }
     if (e.target.closest('[data-esqueci-h]')) esqueciPin(eu());
+    if (e.target.closest('[data-rever-guia]')){
+      fecharSheet();
+      if (rota().nome !== 'inicio') ir('');
+      setTimeout(() => guia(GUIAS.inicio()), 450);
+    }
   });
+}
+
+/* ---------------------------- Guia (só na primeira vez) ---------------------------- */
+let guiaAtivo = false;
+const GUIAS = {
+  inicio: () => [
+    { alvo: '.cta-main', titulo: 'Esta é a sua lista', texto: 'Toque aqui para ver a sua lista e adicionar o que gostaria de ganhar.' },
+    { alvo: '.grid .person:not(.me)', titulo: 'A família', texto: 'Aqui estão todos. Toque no nome de alguém para ver o que essa pessoa gostaria de ganhar.' },
+    { alvo: '[data-ajuda]', titulo: 'Ajuda', texto: 'Se tiver dúvidas, toque aqui. Também pode aumentar o tamanho da letra.' },
+    { alvo: '[data-conta]', titulo: 'A sua conta', texto: 'Aqui pode mudar o seu PIN, pôr os seus tamanhos ou sair.' },
+  ],
+  lista: () => [
+    { alvo: '.add-card', titulo: 'Adicionar um presente', texto: 'Toque no botão azul + e escreva o que gostaria de ganhar. Só o nome é obrigatório; o resto é opcional.' },
+    { alvo: '.sizes-empty, .sizes', titulo: 'Os seus tamanhos', texto: 'Opcional: indique o tamanho de roupa e calçado. Ajuda quem vai comprar.' },
+    { alvo: '[data-inicio]', titulo: 'Voltar ao início', texto: 'Toque aqui para voltar e ver as listas da família.' },
+  ],
+};
+function talvezGuia(tipo, depois){
+  const me = S.sessao && S.sessao.membro_id;
+  const vistos = ls.get('presentes-guia', {});
+  const ja = vistos[tipo] || [];
+  const certo = tipo === 'inicio' ? rota().nome === 'inicio' : rota().id === me;
+  if (!me || ja.includes(me) || guiaAtivo || sheetAtual || !certo){ depois && depois(); return; }
+  vistos[tipo] = [...ja, me]; ls.set('presentes-guia', vistos);
+  guia(GUIAS[tipo](), depois);
+}
+function guia(passos, depois){
+  passos = passos.filter(p => document.querySelector(p.alvo));
+  if (!passos.length || guiaAtivo){ depois && depois(); return; }
+  guiaAtivo = true;
+  let i = 0;
+  const bd = document.createElement('div');
+  bd.className = 'tour';
+  bd.innerHTML = '<div class="tour-hole"></div><div class="tour-tip" role="dialog" aria-live="polite"></div>';
+  document.body.appendChild(bd);
+  document.body.style.overflow = 'hidden';
+  const hole = bd.firstChild, tip = bd.lastChild;
+  function mostrar(){
+    const p = passos[i], el = document.querySelector(p.alvo);
+    if (!el) return proximo();
+    const r0 = el.getBoundingClientRect();
+    if (getComputedStyle(el.closest('.topbar') || el).position !== 'fixed' && (r0.top < 90 || r0.bottom > innerHeight - 220))
+      window.scrollTo(0, Math.max(0, scrollY + r0.top - innerHeight * 0.3));
+    requestAnimationFrame(() => {
+      const r = el.getBoundingClientRect(), pad = 8;
+      Object.assign(hole.style, { top: r.top - pad + 'px', left: r.left - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px', borderRadius: getComputedStyle(el).borderRadius === '0px' ? '18px' : `calc(${getComputedStyle(el).borderRadius} + ${pad}px)` });
+      const ultimo = i === passos.length - 1;
+      tip.innerHTML = `
+        <p class="tour-n">${i + 1} de ${passos.length}</p>
+        <h3>${esc(p.titulo)}</h3>
+        <p>${esc(p.texto)}</p>
+        <div class="tour-acts">
+          ${ultimo ? '<span></span>' : '<button class="link-text" data-t-sair>Saltar</button>'}
+          <button class="btn btn-primary press" data-t-next>${ultimo ? 'Percebi!' : 'Seguinte'}</button>
+        </div>`;
+      if (r.top + r.height / 2 < innerHeight / 2){ tip.style.top = (r.bottom + pad + 14) + 'px'; tip.style.bottom = 'auto'; }
+      else { tip.style.bottom = (innerHeight - r.top + pad + 14) + 'px'; tip.style.top = 'auto'; }
+      tip.classList.remove('in'); void tip.offsetWidth; tip.classList.add('in');
+    });
+  }
+  function proximo(){ i++; if (i < passos.length) mostrar(); else fim(); }
+  function fim(){ bd.remove(); document.body.style.overflow = ''; guiaAtivo = false; window.scrollTo({ top: 0, behavior: 'smooth' }); depois && depois(); }
+  bd.addEventListener('click', e => {
+    if (e.target.closest('[data-t-next]')){ vib(); proximo(); }
+    else if (e.target.closest('[data-t-sair]')) fim();
+  });
+  mostrar();
 }
 
 let promptInstalar = null;
@@ -1364,9 +1425,6 @@ document.addEventListener('click', async e => {
   const t = e.target;
   const go = t.closest('[data-go]'); if (go) return ir('p/' + go.dataset.go);
   if (t.closest('[data-inicio]')) return ir('');
-  if (t.closest('[data-comecar]')){ ls.set('presentes-visto', true); return ir('entrar', true); }
-  if (t.closest('[data-so-ver]')){ ls.set('presentes-visto', true); return ir('', true); }
-  if (t.closest('[data-ir-entrar]')) return ir('entrar');
   const sou = t.closest('[data-sou]');
   if (sou){
     const id = sou.dataset.sou;
@@ -1374,7 +1432,7 @@ document.addEventListener('click', async e => {
     if (S.sessao) sair();
     return pedirLogin(id);
   }
-  if (t.closest('[data-nao-sou]')){ sair(); render(); return ir('entrar'); }
+  if (t.closest('[data-nao-sou]')){ sair(); return ir(''); }
   if (t.closest('[data-ajuda]')) return abrirAjuda();
   if (t.closest('[data-conta]')) return abrirConta();
   if (t.closest('[data-add]')) return abrirItem();
@@ -1399,7 +1457,6 @@ window.addEventListener('scroll', onScroll, { passive: true });
 
 /* ---------------------------- Arranque ---------------------------- */
 (function init(){
-  if (!S.sessao && !ls.get('presentes-visto') && rota().nome === 'inicio') location.replace('#/bemvindo');
   render();
   if (S.sessao){
     rpc('validar_sessao', { p_token: S.sessao.token }).then(r => { if (!r){ guardarSessao(null); render(); } }).catch(() => {});

@@ -4,8 +4,8 @@ Um site para telemóvel onde cada pessoa da família escreve o que gostaria de g
 
 ## O que a família vai ver
 
-1. **Boas-vindas (só na primeira visita).** Uma explicação em 3 passos e dois botões: "Começar" e "Só quero ver as listas".
-2. **Quem é você?** A pessoa toca no seu nome e digita o PIN. Na primeira vez é **1234**, e a seguir o site sugere criar um PIN próprio. Depois disso, fica sempre com a sessão iniciada.
+1. **Ecrã de entrada: "Quem é você?"** É a primeira coisa que aparece. A pessoa toca no seu nome e digita o PIN. Na primeira vez é **1234**, e o próprio ecrã avisa.
+2. **Página inicial.** Depois de entrar, aparece o botão "Ver e editar a minha lista" e os cartões de toda a família. Na **primeira vez**, um guia rápido de 4 passos mostra onde está cada coisa e, no fim, sugere criar um PIN próprio. Na primeira visita à própria lista há mais um guia curto (botão +, tamanhos e voltar). Os guias podem ser saltados e revistos em Ajuda › "Ver o guia outra vez".
 3. **A minha lista.** O botão grande **+** adiciona presentes, sem limite. Só o nome do presente é obrigatório; detalhes, cor e link da loja são opcionais.
 4. **Tamanhos (opcional).** Roupa, calças, calçado e outras informações aparecem no topo da lista de cada pessoa.
 5. **Apagar com "Desfazer".** O site pede confirmação e, depois de apagar, ainda dá 7 segundos para recuperar o presente.
